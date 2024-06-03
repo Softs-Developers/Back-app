@@ -84,7 +84,70 @@ var db = new sqlite3.Database(
             }
           
   
-    
+            function processPeliculas(req, res, db) {
+              if (!verificarUsuario(req)) {
+                res.json({ errormsg: 'Usuario no autenticado' });
+                return;
+              }
+            
+              db.all(
+                  'SELECT * FROM peliculas',
+                  (err, rows) => {
+                    if (rows == undefined || rows.length === 0) {
+                      res.json({ errormsg: 'No existen categorías' });
+                    } else {
+                      res.json(rows);
+                    }
+                  }
+                );
+              }
+
+
+
+
+             function processPeliculasByCategoiaId(req, res, db){
+              var CategoriaId = req.body.categoriaId;
+
+              if (!verificarUsuario(req)) {
+                res.json({ errormsg: 'Usuario no autenticado' });
+                return;
+              }
+            
+              db.all(
+                  'SELECT * FROM peliculas where peliculas.id_cat=?', CategoriaId,
+                  (err, rows) => {
+                    if (rows == undefined || rows.length === 0) {
+                      res.json({ errormsg: 'No existen peliculas' });
+                    } else {
+                      res.json(rows);
+                    }
+                  }
+                );
+              }
+
+              function  processPeliculasByCategoriaName(req, res, db){
+                var CategoriaName = req.body.categoriaName;
+
+              if (!verificarUsuario(req)) {
+                res.json({ errormsg: 'Usuario no autenticado' });
+                return;
+              }
+            
+              db.all(
+                'SELECT peliculas.title FROM categorias, peliculas WHERE categorias.id = peliculas.id_cat AND categorias.name = ?', CategoriaName,
+
+                  (err, rows) => {
+                    if (rows == undefined || rows.length === 0) {
+                      res.json({ errormsg: 'No existe dicha pelicula en dicha categoria' });
+                    } else {
+                      res.json(rows);
+                    }
+                  }
+                );
+              }
+
+
+
       // Ahora la acción asociada al login sería:
 router.post('/login', (req, res) => {
     // Comprobar si la petición contiene los campos ('user' y 'passwd')
@@ -97,11 +160,37 @@ router.post('/login', (req, res) => {
     });
 
 
-    // Configurar la accion asociada al listado de correos
+    // Configurar la accion asociada a la solicitud de todas las categorias
     router.get('/categorias', (req, res) => {
         processCategorias(req, res, db);
       });
 
+
+      
+    // Configurar la accion asociada a la solicitud de todas las películas
+    router.get('/peliculas', (req, res) => {
+      processPeliculas(req, res, db);
+    });
+
+
+    // Configurar la accion asociada a la solicitud de peliculas pasando el id de la categoría a la que pertenecen
+    router.get('/peliculaByCategoria', (req, res) => {
+      if(req.body.categoriaId){
+      processPeliculasByCategoiaId(req, res, db);
+    }else if(req.body.categoriaName){
+      processPeliculasByCategoriaName(req,res,db);
+    }else{
+      res.json({ errormsg: 'Solicitud mal ejecutada'});
+
+    }
+    });
+
+
+    
+    // Configurar la accion asociada a la solicitud de todas las categorias
+    router.get('/categorias', (req, res) => {
+      processCategorias(req, res, db);
+    });
 
 
 // Añadir las rutas al servidor
