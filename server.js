@@ -3,6 +3,8 @@
 const express = require('express');
 // Crearmos un objeto servidor HTTP
 const server = express();
+// Para crear tokens
+const jwt = require('jsonwebtoken'); 
 // definimos el puerto a usar por el servidor HTTP
 const port = 8080;
 // Cargamos el modulo para la gestion de sesiones
@@ -45,14 +47,15 @@ var db = new sqlite3.Database(
             if (row == undefined) {
               res.json({ errormsg: 'El usuario no existe' });
             } else if (row.passwd === passwd) {
-              req.session.userID = row.user_id;
               var data = {
                 user_id: row.user_id,
                 name: row.name,
                 mail: row.mail
               };
-              res.json(data);
+              const token = jwt.sign(data, 'secret_key', { expiresIn: '1h' });
+              res.json({ token, user: data });
             } else {
+             
               res.json({ errormsg: 'Fallo de autenticación' });
             }
           }
@@ -61,13 +64,31 @@ var db = new sqlite3.Database(
       
 
       function verificarUsuario(req) {
-        return req.session.userID !== undefined;
+        const token = req.headers['authorization'];
+        if (!token) {
+          console.log('Token no proporcionado');
+          return false;
+        }
+      
+        try {
+          const decoded = jwt.verify(token.split(' ')[1], 'secret_key');
+          req.user = decoded; // Puedes adjuntar los datos del usuario al objeto req si es necesario
+          console.log('Token verificado con éxito:', decoded);
+          return true;
+        } catch (err) {
+          console.log('Error al verificar el token:', err);
+          return false;
+        }
       }
+
+
+
+      
 
 
         function processCategorias(req, res, db) {
             if (!verificarUsuario(req)) {
-              res.json({ errormsg: 'Usuario no autenticado' });
+              res.json({ errormsg: 'Usuario no autenticado por dar falso en la verificacion' });
               return;
             }
           
