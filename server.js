@@ -36,21 +36,20 @@ var db = new sqlite3.Database(
     );
 
     function processLogin(req, res, db) {
-        var login = req.body.user;
+        var nameLogin = req.body.user;
         var passwd = req.body.passwd;
       
         db.get(
-          'SELECT * FROM users WHERE login=?', login,
+          'SELECT * FROM users WHERE name=?', nameLogin,
           (err, row) => {
             if (row == undefined) {
               res.json({ errormsg: 'El usuario no existe' });
             } else if (row.passwd === passwd) {
               req.session.userID = row.id;
               var data = {
-                id: row.id,
-                login: row.login,
+                user_id: row.user_id,
                 name: row.name,
-                email: row.email
+                mail: row.mail
               };
               res.json(data);
             } else {
@@ -71,7 +70,7 @@ router.post('/login', (req, res) => {
      res.json({ errormsg: 'Peticion mal formada'});
      } else {
     // La petición está bien formada -> procesarla
-     processLogin(req, res, db); // Se la pasa tambien la base de datos
+     processLogin(req, res, db); // Se le pasa tambien la base de datos
      }
     });
 
@@ -80,10 +79,6 @@ router.post('/login', (req, res) => {
 server.use('/', router);
 // Añadir las rutas estáticas al servidor.
 server.use(express.static('.'));
-
-
-
-
 
       // Poner en marcha el servidor ...
 server.listen(port, () => {
