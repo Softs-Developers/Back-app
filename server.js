@@ -45,7 +45,7 @@ var db = new sqlite3.Database(
             if (row == undefined) {
               res.json({ errormsg: 'El usuario no existe' });
             } else if (row.passwd === passwd) {
-              req.session.userID = row.id;
+              req.session.userID = row.user_id;
               var data = {
                 user_id: row.user_id,
                 name: row.name,
@@ -60,7 +60,29 @@ var db = new sqlite3.Database(
       }
       
 
+      function verificarUsuario(req) {
+        return req.session.userID !== undefined;
+      }
 
+
+        function processCategorias(req, res, db) {
+            if (!verificarUsuario(req)) {
+              res.json({ errormsg: 'Usuario no autenticado' });
+              return;
+            }
+          
+            db.all(
+                'SELECT * FROM categorias',
+                (err, rows) => {
+                  if (rows == undefined || rows.length === 0) {
+                    res.json({ errormsg: 'No existen categorías' });
+                  } else {
+                    res.json(rows);
+                  }
+                }
+              );
+            }
+          
   
     
       // Ahora la acción asociada al login sería:
@@ -73,6 +95,13 @@ router.post('/login', (req, res) => {
      processLogin(req, res, db); // Se le pasa tambien la base de datos
      }
     });
+
+
+    // Configurar la accion asociada al listado de correos
+    router.get('/categorias', (req, res) => {
+        processCategorias(req, res, db);
+      });
+
 
 
 // Añadir las rutas al servidor
