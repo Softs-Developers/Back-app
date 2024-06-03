@@ -86,7 +86,7 @@ var db = new sqlite3.Database(
       
 
 
-        function processCategorias(req, res, db) {
+        function processGetCategorias(req, res, db) {
             if (!verificarUsuario(req)) {
               res.json({ errormsg: 'Usuario no autenticado por dar falso en la verificacion' });
               return;
@@ -105,7 +105,7 @@ var db = new sqlite3.Database(
             }
           
   
-            function processPeliculas(req, res, db) {
+            function processGetPeliculas(req, res, db) {
               if (!verificarUsuario(req)) {
                 res.json({ errormsg: 'Usuario no autenticado' });
                 return;
@@ -126,7 +126,7 @@ var db = new sqlite3.Database(
 
 
 
-             function processPeliculasByCategoiaId(req, res, db){
+             function processGetPeliculasByCategoiaId(req, res, db){
               var CategoriaId = req.body.categoriaId;
 
               if (!verificarUsuario(req)) {
@@ -146,7 +146,7 @@ var db = new sqlite3.Database(
                 );
               }
 
-              function  processPeliculasByCategoriaName(req, res, db){
+              function  processGetPeliculasByCategoriaName(req, res, db){
                 var CategoriaName = req.body.categoriaName;
 
               if (!verificarUsuario(req)) {
@@ -182,24 +182,24 @@ router.post('/login', (req, res) => {
 
 
     // Configurar la accion asociada a la solicitud de todas las categorias
-    router.get('/categorias', (req, res) => {
-        processCategorias(req, res, db);
+    router.get('/getCategorias', (req, res) => {
+        processGetCategorias(req, res, db);
       });
 
 
       
     // Configurar la accion asociada a la solicitud de todas las películas
-    router.get('/peliculas', (req, res) => {
-      processPeliculas(req, res, db);
+    router.get('/getPeliculas', (req, res) => {
+      processGetPeliculas(req, res, db);
     });
 
 
     // Configurar la accion asociada a la solicitud de peliculas pasando el id de la categoría a la que pertenecen
-    router.get('/peliculaByCategoria', (req, res) => {
+    router.get('/getPeliculaByCategoria', (req, res) => {
       if(req.body.categoriaId){
-      processPeliculasByCategoiaId(req, res, db);
+      processGetPeliculasByCategoiaId(req, res, db);
     }else if(req.body.categoriaName){
-      processPeliculasByCategoriaName(req,res,db);
+      processGetPeliculasByCategoriaName(req,res,db);
     }else{
       res.json({ errormsg: 'Solicitud mal ejecutada'});
 
@@ -209,9 +209,16 @@ router.post('/login', (req, res) => {
 
     
     // Configurar la accion asociada a la solicitud de todas las categorias
-    router.get('/categorias', (req, res) => {
-      processCategorias(req, res, db);
+    router.get('/getCategorias', (req, res) => {
+      processGetCategorias(req, res, db);
     });
+
+     
+
+
+
+
+
 
 
 // Añadir las rutas al servidor
