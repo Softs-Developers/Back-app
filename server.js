@@ -210,14 +210,42 @@ router.get('/getPeliculaByCategoria', (req, res) => {
 
 
 
-
-
-
 //MÉTODOS POSTS
 
+
+function processPostCategorias(req,res,db){
+  var nameCategoria = req.body.nameCategoria;
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;
+  }
+  db.all(
+
+    'INSERT INTO   categorias (name) values (?)', nameCategoria,
+      
+    (err) => {
+      console.log("el nombre del categoría es " + nameCategoria);
+
+      if (err) {
+        console.log("Se ha producido el siguiente error a la hora de la insercción " + err );
+      } else {
+        res.json({ errormsg: 'Insertado correctamente' });
+      }
+    }
+  );
+};
+
+
+
+
 // Configurar la accion asociada a la insercción  de nuevas categorias
-router.post('/postCategorias', (req, res) => {
-  processPostCategorias(req, res, db);
+router.post('/postCategorias', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
+if (!req.body.nameCategoria ) {
+  res.json({ errormsg: 'Peticion mal formada' });
+} else {
+  // La petición está bien formada -> procesarla
+  processPostCategorias(req, res, db); // Se le pasa tambien la base de datos
+}
 });
 
 
