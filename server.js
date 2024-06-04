@@ -107,14 +107,14 @@ function processGetCategorias(req, res, db) {
 }
 
 
-function processGetPeliculas(req, res, db) {
+function processGetVideos(req, res, db) {
   if (!verificarUsuario(req)) {
     res.json({ errormsg: 'Usuario no autenticado' });
     return;
   }
 
   db.all(
-    'SELECT * FROM peliculas',
+    'SELECT * FROM Videos',
     (err, rows) => {
       if (rows == undefined || rows.length === 0) {
         res.json({ errormsg: 'No existen categorías' });
@@ -128,7 +128,7 @@ function processGetPeliculas(req, res, db) {
 
 
 
-function processGetPeliculasByCategoiaId(req, res, db) {
+function processGetVideosByCategoiaId(req, res, db) {
   var CategoriaId = req.body.categoriaId;
 
   if (!verificarUsuario(req)) {
@@ -137,10 +137,10 @@ function processGetPeliculasByCategoiaId(req, res, db) {
   }
 
   db.all(
-    'SELECT * FROM peliculas where peliculas.id_cat=?', CategoriaId,
+    'SELECT * FROM videos where videos.id_cat=?', CategoriaId,
     (err, rows) => {
       if (rows == undefined || rows.length === 0) {
-        res.json({ errormsg: 'No existen peliculas' });
+        res.json({ errormsg: 'No existen videos' });
       } else {
         res.json(rows);
       }
@@ -148,7 +148,7 @@ function processGetPeliculasByCategoiaId(req, res, db) {
   );
 }
 
-function processGetPeliculasByCategoriaName(req, res, db) {
+function processGetVideosByCategoriaName(req, res, db) {
   var CategoriaName = req.body.categoriaName;
 
   if (!verificarUsuario(req)) {
@@ -157,11 +157,11 @@ function processGetPeliculasByCategoriaName(req, res, db) {
   }
 
   db.all(
-    'SELECT peliculas.title FROM categorias, peliculas WHERE categorias.id = peliculas.id_cat AND categorias.name = ?', CategoriaName,
+    'SELECT videos.title FROM categorias, videos WHERE categorias.id = videos.id_cat AND categorias.name = ?', CategoriaName,
 
     (err, rows) => {
       if (rows == undefined || rows.length === 0) {
-        res.json({ errormsg: 'No existe dicha pelicula en dicha categoria' });
+        res.json({ errormsg: 'No existe dicho video en dicha categoria' });
       } else {
         res.json(rows);
       }
@@ -191,17 +191,17 @@ router.get('/getCategorias', (req, res) => {
 
 
 // Configurar la accion asociada a la solicitud de todas las películas
-router.get('/getPeliculas', (req, res) => {
-  processGetPeliculas(req, res, db);
+router.get('/getVideos', (req, res) => {
+  processGetVideos(req, res, db);
 });
 
 
-// Configurar la accion asociada a la solicitud de peliculas pasando el id de la categoría a la que pertenecen
-router.get('/getPeliculaByCategoria', (req, res) => {
+// Configurar la accion asociada a la solicitud de video pasando el id de la categoría a la que pertenecen
+router.get('/getVideoByCategoria', (req, res) => {
   if (req.body.categoriaId) {
-    processGetPeliculasByCategoiaId(req, res, db);
+    processGetVideosByCategoiaId(req, res, db);
   } else if (req.body.categoriaName) {
-    processGetPeliculasByCategoriaName(req, res, db);
+    processGetVideosByCategoriaName(req, res, db);
   } else {
     res.json({ errormsg: 'Solicitud mal ejecutada' });
 
@@ -236,6 +236,48 @@ function processPostCategorias(req,res,db){
 };
 
 
+function processPostVideo(req, res, db) {
+  var nameCategoriaVideo = req.body.postNameCategoriaDeVideo;
+  var postUrlDeVideo = req.body.postUrlDeVideo;
+  var postNameDeVideo = req.body.postNameDeVideo;
+
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;
+  }
+
+  // Primero, verifica si la categoría ya existe
+  db.get('SELECT id FROM categorias WHERE name = ?', [nameCategoriaVideo], (err, row) => {
+    if (err) {
+      console.log("la categoría introducicda no existe, por favor crea una nnueva, el error es: " + err);
+      return;
+    }
+
+    if (row) {
+      // Usar el id de la categoría porque existe
+      insertarVideo(row.id);
+    } else {
+      console.log("Error solicitando el indice de categoria");
+
+    }
+  });
+
+  function insertarVideo(idCategoria) {
+    db.run(
+      'INSERT INTO videos (title, url, categoria, id_cat) VALUES (?, ?, ?, ?)',
+      [postNameDeVideo, postUrlDeVideo, nameCategoriaVideo, idCategoria],
+      (err) => {
+        if (err) {
+          res.json({ errormsg: 'Error insertando el video' });
+          return;
+        }
+        res.json({ msg: 'Video insertado correctamente' });
+      }
+    );
+  }
+}
+
+
 
 
 // Configurar la accion asociada a la insercción  de nuevas categorias
@@ -250,9 +292,17 @@ if (!req.body.nameCategoria ) {
 
 
 
+// Configurar la accion asociada a la insercción  de nuevos videos
+router.post('/postVideo', (req, res) =>{// Comprobar si la petición contiene los campos 
+  if (!req.body.postNameDeVideo || !req.body.postUrlDeVideo || !req.body.postNameCategoriaDeVideo) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPostVideo(req, res, db); // Se le pasa tambien la base de datos
+  }
+  });
 
-
-
+  
 
 
 
