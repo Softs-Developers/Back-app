@@ -125,7 +125,23 @@ function processGetVideos(req, res, db) {
   );
 }
 
+function processGetUsuarios(req, res, db) {
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;
+  }
 
+  db.all(
+    'SELECT * FROM users',
+    (err, rows) => {
+      if (rows == undefined || rows.length === 0) {
+        res.json({ errormsg: 'No existen categorías' });
+      } else {
+        res.json(rows);
+      }
+    }
+  );
+}
 
 
 function processGetVideosByCategoiaId(req, res, db) {
@@ -180,6 +196,13 @@ router.post('/login', (req, res) => {
     // La petición está bien formada -> procesarla
     processLogin(req, res, db); // Se le pasa tambien la base de datos
   }
+});
+
+
+
+// Configurar la accion asociada a la solicitud de todos los usuarios
+router.get('/getUsuarios', (req, res) => {
+  processGetUsuarios(req, res, db);
 });
 
 
@@ -277,6 +300,25 @@ function processPostVideo(req, res, db) {
   }
 }
 
+ function processPostUsuario(req, res, db){
+  var postNameDeUsuario = req.body.postNameDeUsuario;
+  var postMailDeUsuario = req.body.postMailDeUsuario;
+  var postPasswdDelUsuario = req.body.postPasswdDelUsuario;
+  db.run(
+    'INSERT INTO users (name, mail, passwd) VALUES (?, ?, ?)',
+    [postNameDeUsuario, postMailDeUsuario, postPasswdDelUsuario],
+    (err) => {
+      if (err) {
+        console.log("Error al insertar el usuario, provocado por el siguiente error " + err);
+        return;
+      }
+      res.json({ msg: 'Usuario insertado correctamente' });
+    }
+  );
+}
+
+ 
+
 
 
 
@@ -292,7 +334,7 @@ if (!req.body.nameCategoria ) {
 
 
 
-// Configurar la accion asociada a la insercción  de nuevos videos
+// Configurar la accion asociada a la creacion  de nuevos videos
 router.post('/postVideo', (req, res) =>{// Comprobar si la petición contiene los campos 
   if (!req.body.postNameDeVideo || !req.body.postUrlDeVideo || !req.body.postNameCategoriaDeVideo) {
     res.json({ errormsg: 'Peticion mal formada' });
@@ -304,6 +346,15 @@ router.post('/postVideo', (req, res) =>{// Comprobar si la petición contiene lo
 
   
 
+// Configurar la accion asociada a la creacion  de nuevos usuarios
+router.post('/postUsuario', (req, res) =>{// Comprobar si la petición contiene los campos 
+  if (!req.body.postNameDeUsuario|| !req.body.postMailDeUsuario || !req.body.postPasswdDelUsuario) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPostUsuario(req, res, db); // Se le pasa tambien la base de datos
+  }
+  });
 
 
 
