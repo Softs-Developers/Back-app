@@ -78,7 +78,7 @@ function verificarUsuario(req) {
     console.log('Token verificado con éxito:', decoded);
     return true;
   } catch (err) {
-    console.log('Error al verificar el token:', err);
+    res.json({ errormsg: 'Error al verificar el token'}, err);
     return false;
   }
 }
@@ -90,7 +90,7 @@ function verificarUsuario(req) {
 
 function processGetCategorias(req, res, db) {
   if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado por dar falso en la verificacion' });
+    res.json({ errormsg: 'Usuario no autenticado por dar falso en la verificacion'}, err);
     return;
   }
 
@@ -251,6 +251,7 @@ function processPostCategorias(req,res,db){
 
       if (err) {
         console.log("Se ha producido el siguiente error a la hora de la insercción " + err );
+        res.json({ errormsg: "Se ha producido el siguiente error a la hora de la insercción "} , err);
       } else {
         res.json({ errormsg: 'Insertado correctamente' });
       }
@@ -273,6 +274,7 @@ function processPostVideo(req, res, db) {
   db.get('SELECT id FROM categorias WHERE name = ?', [nameCategoriaVideo], (err, row) => {
     if (err) {
       console.log("la categoría introducicda no existe, por favor crea una nnueva, el error es: " + err);
+      res.json({ errormsg: "la categoría introducicda no existe, por favor crea una nueva "}, err);
       return;
     }
 
@@ -280,7 +282,8 @@ function processPostVideo(req, res, db) {
       // Usar el id de la categoría porque existe
       insertarVideo(row.id);
     } else {
-      console.log("Error solicitando el indice de categoria");
+
+      res.json({ errormsg: "Error solicitando el indice de categoria"});
 
     }
   });
@@ -291,7 +294,7 @@ function processPostVideo(req, res, db) {
       [postNameDeVideo, postUrlDeVideo, nameCategoriaVideo, idCategoria],
       (err) => {
         if (err) {
-          res.json({ errormsg: 'Error insertando el video' });
+          res.json({ errormsg: 'Error insertando el video' }, err);
           return;
         }
         res.json({ msg: 'Video insertado correctamente' });
@@ -358,6 +361,88 @@ router.post('/postUsuario', (req, res) =>{// Comprobar si la petición contiene 
 
 
 
+  // metodos de delete
+
+  function processDeleteCategorias(req, res, db){
+    var deleteNameCategoria = req.body.deleteNameCategoria;
+
+    db.run(
+      'delete from categorias where name=?',deleteNameCategoria,
+      (err) => {
+        if (err) {
+          console.log("Error al insertar el usuario, provocado por el siguiente error " + err);
+          return;
+        }
+        res.json({ msg: 'Categoria eliminada correctamente' });
+      }
+    );
+  }
+
+
+  function  processDeleteVideos(req, res, db){
+
+    var deleteNameVideo = req.body.deleteNameVideo;
+
+    db.run(
+      'delete from videos where title=?',deleteNameVideo,
+      (err) => {
+        if (err) {
+          console.log("Error al eliminar video con error: " + err);
+          return;
+        }
+        res.json({ msg: 'video eliminado correctamente' });
+      }
+    );
+  }
+
+
+
+  function  processDeleteUsuarios(req, res, db){
+    var deleteIDUsuario = req.body.deleteIDUsuario;
+    db.run(
+      'delete from users where user_id=?',deleteIDUsuario,
+      (err) => {
+        if (err) {
+          console.log("Error al eliminar el usuario con error: " + err);
+          return;
+        }
+        res.json({ msg: 'usuario eliminado correctamente' });
+      }
+    );
+  }
+
+
+  // Configurar la accion asociada a la insercción  de nuevas categorias
+router.delete('/deleteCategorias', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
+  if (!req.body.deleteNameCategoria ) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processDeleteCategorias(req, res, db); // Se le pasa tambien la base de datos
+  }
+  });
+
+
+
+
+  router.delete('/deleteVideos', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
+    if (!req.body.deleteNameVideo) {
+      res.json({ errormsg: 'Peticion mal formada' });
+    } else {
+      // La petición está bien formada -> procesarla
+      processDeleteVideos(req, res, db); // Se le pasa tambien la base de datos
+    }
+    });
+
+
+    router.delete('/deleteUsuarios', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
+      if (!req.body.deleteIDUsuario) {
+        res.json({ errormsg: 'Peticion mal formada' });
+      } else {
+        // La petición está bien formada -> procesarla
+        processDeleteUsuarios(req, res, db); // Se le pasa tambien la base de datos
+      }
+      });
 
 
 
