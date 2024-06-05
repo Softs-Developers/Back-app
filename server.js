@@ -324,7 +324,6 @@ function processPostVideo(req, res, db) {
 
 
 
-
 // Configurar la accion asociada a la insercción  de nuevas categorias
 router.post('/postCategorias', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
 if (!req.body.nameCategoria ) {
@@ -443,6 +442,201 @@ router.delete('/deleteCategorias', (req, res) =>{// Comprobar si la petición co
         processDeleteUsuarios(req, res, db); // Se le pasa tambien la base de datos
       }
       });
+
+
+      //Método para actualizar informacion usando el patch
+
+
+      // Configurar la accion asociada a la actualización de categorias
+router.patch('/patchCategorias', (req, res) => {
+  if (!req.body.nameCategoria) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPatchCategorias(req, res, db); // Se le pasa también la base de datos
+  }
+});
+
+
+function processPatchCategorias(req, res, db) {
+  var nameCategoria = req.body.nameCategoria;
+  var newNameCategoria = req.body.newNameCategoria; // Nuevo nombre para la categoría
+
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;
+  }
+
+  db.get(
+    'SELECT id FROM categorias WHERE name = ?',
+    [nameCategoria],
+    function(err, row) {
+      if (err) {
+        console.log("Error al buscar la categoría: " + err);
+        res.json({ errormsg: "Error al buscar la categoría", error: err });
+        return;
+      }
+
+      if (!row) {
+        res.json({ errormsg: 'No se encontró la categoría con el nombre proporcionado' });
+        return;
+      }
+
+      var id = row.id;
+
+      db.run(
+        'UPDATE categorias SET name = ? WHERE id = ?',
+        [newNameCategoria, id],
+        function(err) {
+          console.log("Actualizando la categoría con ID " + id + " a " + newNameCategoria);
+
+          if (err) {
+            console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
+            res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+          } else {
+            res.json({ errormsg: 'Actualizado correctamente' });
+          }
+        }
+      );
+    }
+  );
+}
+
+
+
+
+// Configurar la accion asociada a la actualización de videos
+router.patch('/patchVideo', (req, res) => {
+  if (!req.body.postNameDeVideo && !req.body.newPostUrlDeVideo && !req.body.postNameCategoriaDeVideo && !newPostNameDeVideo) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPatchVideos(req, res, db); // Se le pasa también la base de datos
+  }
+});
+
+
+
+
+function processPatchVideos(req, res, db) {
+  var nameCategoriaVideo = req.body.postNameCategoriaDeVideo;
+  var postNameDeVideo = req.body.postNameDeVideo;
+  var newPostUrlDeVideo = req.body.newPostUrlDeVideo;
+  var newPostNameDeVideo = req.body.newPostNameDeVideo;
+
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;
+  }
+
+  // Primero, verificar si la categoría ya existe
+  db.get('SELECT id FROM categorias WHERE name = ?', [nameCategoriaVideo], (err, row) => {
+    if (err) {
+      console.log("Error al verificar la categoría: " + err);
+      res.json({ errormsg: "Error al verificar la categoría", error: err });
+      return;
+    }
+
+    if (!row) {
+      res.json({ errormsg: "La categoría introducida no existe, por favor crea una nueva" });
+      return;
+    }
+
+    // Usar el id de la categoría porque existe
+    var idCategoria = row.id;
+
+    // Busca el video con el nombre y categoría proporcionados
+    db.get('SELECT id FROM videos WHERE title = ? AND id_cat = ?', [postNameDeVideo, idCategoria], (err, row) => {
+      if (err) {
+        console.log("Error al buscar el video: " + err);
+        res.json({ errormsg: "Error al buscar el video", error: err });
+        return;
+      }
+
+      if (!row) {
+        res.json({ errormsg: "El video no existe en la categoría proporcionada" });
+        return;
+      }
+
+      // Actualiza el video con los nuevos detalles
+      db.run(
+        'UPDATE videos SET title = ?, url = ? WHERE id = ?',
+        [newPostNameDeVideo || postNameDeVideo, newPostUrlDeVideo || newPostUrlDeVideo, row.id],
+        function(err) {
+          console.log("Actualizando el video con ID " + row.id + " a " + (newPostNameDeVideo || postNameDeVideo) + " y URL " + (newPostUrlDeVideo || postUrlDeVideo));
+
+          if (err) {
+            console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
+            res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+          } else {
+            res.json({ msg: 'Actualizado correctamente' });
+          }
+        }
+      );
+    });
+  });
+}
+
+router.patch('/patchUsuario', (req, res) => {
+  if (!req.body.patchNameDeUsuario && !req.body.patchMailDeUsuario && !req.body.patchPasswdDelUsuario && 
+    !req.body.newpatchNameDeUsuario && !req.body.newpatchMailDeUsuario && !req.body.newpatchPasswdDelUsuario) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPatchUsuario(req, res, db); // Se le pasa también la base de datos
+  }
+});
+
+
+
+
+
+function processPatchUsuario(req, res, db) {
+  var patchNameDeUsuario = req.body.patchNameDeUsuario;
+  var patchMailDeUsuario = req.body.patchMailDeUsuario;
+  var patchPasswdDelUsuario = req.body.patchPasswdDelUsuario;
+  var newpatchNameDeUsuario = req.body.newpatchNameDeUsuario;
+  var newpatchMailDeUsuario = req.body.newpatchMailDeUsuario;
+  var newpatchPasswdDelUsuario = req.body.newpatchPasswdDelUsuario;
+
+  if (!verificarUsuario(req)) {
+    res.json({ errormsg: 'Usuario no autenticado' });
+    return;}
+ // Primero, verificar si el usuario  existe
+ db.get('SELECT user_id FROM users WHERE name = ?', [patchNameDeUsuario], (err, row) => {
+  if (err) {
+    res.json({ errormsg: "Nombre de usuario inexistente", error: err });
+    return;
+  }
+
+
+
+  if (!row) {
+    res.json({ errormsg: "El usuario introducido, no existe" });
+    return;
+  }
+
+  // Usar el id del usuario porque existe
+  var idUser = row.user_id;
+
+
+    // Actualiza el usuarip con los nuevos detalles
+    db.run(
+      'UPDATE users SET name = ?, mail = ?, passwd=? WHERE user_id = ?',
+      [newpatchNameDeUsuario || patchNameDeUsuario, newpatchMailDeUsuario || patchMailDeUsuario,newpatchPasswdDelUsuario || patchPasswdDelUsuario , idUser],
+      function(err) {
+        console.log("Actualizando el user con ID " + idUser + " a " + (newpatchNameDeUsuario || patchNameDeUsuario) + " mail: " + (newpatchPasswdDelUsuario || patchPasswdDelUsuario));
+
+        if (err) {
+          console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
+          res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+        } else {
+          res.json({ msg: 'Actualizado correctamente' });
+        }
+      }
+    );
+  });
+}
 
 
 
