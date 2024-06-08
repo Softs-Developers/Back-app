@@ -2,7 +2,10 @@
 // Cargamos el modulo de Express
 const express = require('express');
 // Crearmos un objeto servidor HTTP
+const cors = require('cors');
 const server = express();
+// Use cors middleware
+server.use(cors());
 // Para crear tokens
 const jwt = require('jsonwebtoken');
 // definimos el puerto a usar por el servidor HTTP
