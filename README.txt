@@ -1,2 +1,3 @@
-Viendo que Hamza Hmiddouch  no Sabe documentar el trabajo en ficheros README , siguiendo las guias de buenas prácticas de cualquier empresa seria 
-Me toca a mi Javier Verú Sánchez proceder a arreglar este desastre 
+HAN SIDO ACTUALIZADAS TODOS LAS FUNCIONALIDADES DEL PATCH,
+SE HA CREADO LA FUNCION LOGOUT QUE ELIMINA EL TOKEN DE LA BASE DE DATOS Y NO TE DEJA ACCEDER MÁS.
+SE HA AÑADIDO A LA TABL USER, LA COLUMNA ROL QUE PERTENCE A LOS USUARIOS.
