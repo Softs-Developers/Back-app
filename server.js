@@ -24,6 +24,7 @@ server.use(bodyParser.urlencoded({ extended: false }));
 server.use(bodyParser.json());
 // Obtener el configurador de rutas
 const router = express.Router();
+router.use(express.json());
 // cargar el módulo para bases de datos SQLite
 var sqlite3 = require('sqlite3').verbose();
 // Abrir nuestra base de datos
@@ -37,27 +38,48 @@ var db = new sqlite3.Database(
   }
 );
 
-//MÉTODOS GETS
 
+
+
+//MÉTODOS GETS
 function processLogin(req, res, db) {
   var nameLogin = req.body.user;
   var passwd = req.body.passwd;
-
   db.get(
-    'SELECT * FROM users WHERE name=?', nameLogin,
+    'SELECT * FROM users WHERE name = ?', [nameLogin],
     (err, row) => {
-      if (row == undefined) {
+      if (err) {
+        res.json({ errormsg: 'Error en la base de datos', error: err });
+        return;
+      }
+
+      if (!row) {
         res.json({ errormsg: 'El usuario no existe' });
       } else if (row.passwd === passwd) {
         var data = {
           user_id: row.user_id,
           name: row.name,
-          mail: row.mail
+          mail: row.mail,
+
         };
         const token = jwt.sign(data, 'secret_key', { expiresIn: '1h' });
-        res.json({ token, user: data });
-      } else {
+        const rolUSer = row.ROL;
+        console.log(rolUSer);
 
+        // Insertar el token en la tabla sesiones_virtuales
+        db.run(
+          'INSERT INTO sesiones_virtuales (session_id, token) VALUES (?, ?)',
+          [row.user_id, token],
+          (err) => {
+            if (err) {
+              res.json({ errormsg: 'Error al guardar la sesión', error: err });
+              console.log("se ha dado el siguiente error " + err)
+              return;
+            }
+            res.json({ token, rolUsuario: rolUSer, user: data });
+          }
+        );
+      } else {
         res.json({ errormsg: 'Fallo de autenticación' });
       }
     }
@@ -65,35 +87,56 @@ function processLogin(req, res, db) {
 }
 
 
-function verificarUsuario(req) {
-  const token = req.headers['authorization'];
+
+function verificarUsuario(req, res, next) {
+  const authorizationHeader = req.headers['authorization'];
+  if (!authorizationHeader) {
+    console.log('Token no proporcionado');
+    return res.json({ errormsg: 'Token no proporcionado' });
+  }
+
+  const token = authorizationHeader.split(' ')[1];
+  console.log("El token enviado es " + token);
   if (!token) {
     console.log('Token no proporcionado');
-    return false;
+    return res.json({ errormsg: 'Token no proporcionado' });
   }
 
   try {
-    const decoded = jwt.verify(token.split(' ')[1], 'secret_key');
-    req.user = decoded; // Puedes adjuntar los datos del usuario al objeto req si es necesario
-    console.log('Token verificado con éxito:', decoded);
-    return true;
+    const decoded = jwt.verify(token, 'secret_key');
+    const userId = decoded.user_id;
+    console.log("El userID del token es " + userId);
+
+    db.get(
+      'SELECT * FROM sesiones_virtuales WHERE session_id = ? AND token = ?',
+      [userId, token],
+      (err, row) => {
+        if (err) {
+          console.log('Error al verificar el token en la base de datos:', err);
+          return res.json({ errormsg: 'Error al verificar el token en la base de datos', error: err });
+        }
+
+        if (!row) {
+          console.log('Token no válido o no encontrado');
+          return res.json({ errormsg: 'Token no válido o no encontrado' });
+        }
+
+        // Token verificado con éxito y encontrado en la base de datos
+        req.user = decoded; // Adjunta los datos del usuario al objeto req si es necesario
+        console.log('Token verificado con éxito:', decoded);
+        next(); // Pasa al siguiente middleware o función de ruta
+      }
+    );
   } catch (err) {
-    res.json({ errormsg: 'Error al verificar el token'}, err);
-    return false;
+    console.log('Error al verificar el token:', err);
+    return res.json({ errormsg: 'Error al verificar el token', error: err });
   }
 }
 
 
 
 
-
-
 function processGetCategorias(req, res, db) {
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado por dar falso en la verificacion'}, err);
-    return;
-  }
-
   db.all(
     'SELECT * FROM categorias',
     (err, rows) => {
@@ -108,29 +151,22 @@ function processGetCategorias(req, res, db) {
 
 
 function processGetVideos(req, res, db) {
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
-
-  db.all(
-    'SELECT * FROM Videos',
-    (err, rows) => {
-      if (rows == undefined || rows.length === 0) {
-        res.json({ errormsg: 'No existen categorías' });
-      } else {
-        res.json(rows);
-      }
+  db.all('SELECT * FROM Videos', (err, rows) => {
+    if (err) {
+      console.log('Error al obtener los videos:', err);
+      return res.json({ errormsg: 'Error al obtener los videos', error: err });
     }
-  );
+
+    if (rows === undefined || rows.length === 0) {
+      return res.json({ errormsg: 'No existen videos' });
+    } else {
+      return res.json(rows);
+    }
+  });
 }
 
-function processGetUsuarios(req, res, db) {
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
 
+function processGetUsuarios(req, res, db) {
   db.all(
     'SELECT * FROM users',
     (err, rows) => {
@@ -146,12 +182,6 @@ function processGetUsuarios(req, res, db) {
 
 function processGetVideosByCategoiaId(req, res, db) {
   var CategoriaId = req.body.categoriaId;
-
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
-
   db.all(
     'SELECT * FROM videos where videos.id_cat=?', CategoriaId,
     (err, rows) => {
@@ -166,12 +196,6 @@ function processGetVideosByCategoiaId(req, res, db) {
 
 function processGetVideosByCategoriaName(req, res, db) {
   var CategoriaName = req.body.categoriaName;
-
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
-
   db.all(
     'SELECT videos.title FROM categorias, videos WHERE categorias.id = videos.id_cat AND categorias.name = ?', CategoriaName,
 
@@ -184,6 +208,8 @@ function processGetVideosByCategoriaName(req, res, db) {
     }
   );
 }
+
+
 
 
 
@@ -200,27 +226,53 @@ router.post('/login', (req, res) => {
 
 
 
+
+//Logout
+router.delete('/logout', verificarUsuario, (req, res) => {// Comprobar si la petición contiene los campos ('user' y 'passwd')
+  if (!req.body.logoutIDUsuario) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processLogout(req, res, db); // Se le pasa tambien la base de datos
+  }
+});
+
+
+function processLogout(req, res, db) {
+  var logoutIDUsuario = req.body.logoutIDUsuario;
+  db.run(
+    'delete from sesiones_virtuales where session_id=?', logoutIDUsuario,
+    (err) => {
+      if (err) {
+        console.log("Error al ejecutar el logout: " + err);
+        return;
+      }
+      res.json({ msg: 'logout ejecutado correctamente' });
+    }
+  );
+}
+
+
 // Configurar la accion asociada a la solicitud de todos los usuarios
-router.get('/getUsuarios', (req, res) => {
+router.get('/getUsuarios', verificarUsuario, (req, res) => {
   processGetUsuarios(req, res, db);
 });
 
 
 // Configurar la accion asociada a la solicitud de todas las categorias
-router.get('/getCategorias', (req, res) => {
+router.get('/getCategorias', verificarUsuario, (req, res) => {
   processGetCategorias(req, res, db);
 });
 
 
-
 // Configurar la accion asociada a la solicitud de todas las películas
-router.get('/getVideos', (req, res) => {
+router.get('/getVideos', verificarUsuario, (req, res) => {
   processGetVideos(req, res, db);
 });
 
 
 // Configurar la accion asociada a la solicitud de video pasando el id de la categoría a la que pertenecen
-router.get('/getVideoByCategoria', (req, res) => {
+router.get('/getVideoByCategoria', verificarUsuario, (req, res) => {
   if (req.body.categoriaId) {
     processGetVideosByCategoiaId(req, res, db);
   } else if (req.body.categoriaName) {
@@ -233,25 +285,20 @@ router.get('/getVideoByCategoria', (req, res) => {
 
 
 
+
+
 //MÉTODOS POSTS
 
-
-function processPostCategorias(req,res,db){
+function processPostCategorias(req, res, db) {
   var nameCategoria = req.body.nameCategoria;
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
   db.all(
-
     'INSERT INTO   categorias (name) values (?)', nameCategoria,
-      
     (err) => {
       console.log("el nombre del categoría es " + nameCategoria);
 
       if (err) {
-        console.log("Se ha producido el siguiente error a la hora de la insercción " + err );
-        res.json({ errormsg: "Se ha producido el siguiente error a la hora de la insercción "} , err);
+        console.log("Se ha producido el siguiente error a la hora de la insercción " + err);
+        res.json({ errormsg: "Se ha producido el siguiente error a la hora de la insercción " }, err);
       } else {
         res.json({ errormsg: 'Insertado correctamente' });
       }
@@ -264,17 +311,11 @@ function processPostVideo(req, res, db) {
   var nameCategoriaVideo = req.body.postNameCategoriaDeVideo;
   var postUrlDeVideo = req.body.postUrlDeVideo;
   var postNameDeVideo = req.body.postNameDeVideo;
-
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
-
   // Primero, verifica si la categoría ya existe
   db.get('SELECT id FROM categorias WHERE name = ?', [nameCategoriaVideo], (err, row) => {
     if (err) {
       console.log("la categoría introducicda no existe, por favor crea una nnueva, el error es: " + err);
-      res.json({ errormsg: "la categoría introducicda no existe, por favor crea una nueva "}, err);
+      res.json({ errormsg: "la categoría introducicda no existe, por favor crea una nueva " }, err);
       return;
     }
 
@@ -283,7 +324,7 @@ function processPostVideo(req, res, db) {
       insertarVideo(row.id);
     } else {
 
-      res.json({ errormsg: "Error solicitando el indice de categoria"});
+      res.json({ errormsg: "Error solicitando el indice de categoria" });
 
     }
   });
@@ -303,13 +344,15 @@ function processPostVideo(req, res, db) {
   }
 }
 
- function processPostUsuario(req, res, db){
+function processPostUsuario(req, res, db) {
   var postNameDeUsuario = req.body.postNameDeUsuario;
   var postMailDeUsuario = req.body.postMailDeUsuario;
   var postPasswdDelUsuario = req.body.postPasswdDelUsuario;
+  var postRolDeUsuario = req.body.postRolDeUsuario;
+
   db.run(
-    'INSERT INTO users (name, mail, passwd) VALUES (?, ?, ?)',
-    [postNameDeUsuario, postMailDeUsuario, postPasswdDelUsuario],
+    'INSERT INTO users (name, mail, passwd, ROL) VALUES (?, ?, ?,?)',
+    [postNameDeUsuario, postMailDeUsuario, postPasswdDelUsuario, postRolDeUsuario],
     (err) => {
       if (err) {
         console.log("Error al insertar el usuario, provocado por el siguiente error " + err);
@@ -320,136 +363,131 @@ function processPostVideo(req, res, db) {
   );
 }
 
- 
-
 
 
 // Configurar la accion asociada a la insercción  de nuevas categorias
-router.post('/postCategorias', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
-if (!req.body.nameCategoria ) {
-  res.json({ errormsg: 'Peticion mal formada' });
-} else {
-  // La petición está bien formada -> procesarla
-  processPostCategorias(req, res, db); // Se le pasa tambien la base de datos
-}
+router.post('/postCategorias', verificarUsuario, (req, res) => {
+
+  if (!req.body.nameCategoria) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPostCategorias(req, res, db); // Se le pasa tambien la base de datos
+  }
 });
 
 
 
 // Configurar la accion asociada a la creacion  de nuevos videos
-router.post('/postVideo', (req, res) =>{// Comprobar si la petición contiene los campos 
+router.post('/postVideo', verificarUsuario, (req, res) => {
   if (!req.body.postNameDeVideo || !req.body.postUrlDeVideo || !req.body.postNameCategoriaDeVideo) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
     processPostVideo(req, res, db); // Se le pasa tambien la base de datos
   }
-  });
+});
 
-  
+
 
 // Configurar la accion asociada a la creacion  de nuevos usuarios
-router.post('/postUsuario', (req, res) =>{// Comprobar si la petición contiene los campos 
-  if (!req.body.postNameDeUsuario|| !req.body.postMailDeUsuario || !req.body.postPasswdDelUsuario) {
+router.post('/postUsuario', verificarUsuario, (req, res) => {
+  if (!req.body.postNameDeUsuario || !req.body.postMailDeUsuario || !req.body.postPasswdDelUsuario || !req.body.postRolDeUsuario) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
     processPostUsuario(req, res, db); // Se le pasa tambien la base de datos
   }
-  });
+});
 
 
 
-  // metodos de delete
-
-  function processDeleteCategorias(req, res, db){
-    var deleteNameCategoria = req.body.deleteNameCategoria;
-
-    db.run(
-      'delete from categorias where name=?',deleteNameCategoria,
-      (err) => {
-        if (err) {
-          console.log("Error al insertar el usuario, provocado por el siguiente error " + err);
-          return;
-        }
-        res.json({ msg: 'Categoria eliminada correctamente' });
+// metodos de delete
+function processDeleteCategorias(req, res, db) {
+  var deleteNameCategoria = req.body.deleteNameCategoria;
+  db.run(
+    'delete from categorias where name=?', deleteNameCategoria,
+    (err) => {
+      if (err) {
+        console.log("Error al insertar el usuario, provocado por el siguiente error " + err);
+        return;
       }
-    );
-  }
+      res.json({ msg: 'Categoria eliminada correctamente' });
+    }
+  );
+}
 
 
-  function  processDeleteVideos(req, res, db){
-
-    var deleteNameVideo = req.body.deleteNameVideo;
-
-    db.run(
-      'delete from videos where title=?',deleteNameVideo,
-      (err) => {
-        if (err) {
-          console.log("Error al eliminar video con error: " + err);
-          return;
-        }
-        res.json({ msg: 'video eliminado correctamente' });
+function processDeleteVideos(req, res, db) {
+  var deleteNameVideo = req.body.deleteNameVideo;
+  db.run(
+    'delete from videos where title=?', deleteNameVideo,
+    (err) => {
+      if (err) {
+        console.log("Error al eliminar video con error: " + err);
+        return;
       }
-    );
-  }
+      res.json({ msg: 'video eliminado correctamente' });
+    }
+  );
+}
 
 
 
-  function  processDeleteUsuarios(req, res, db){
-    var deleteIDUsuario = req.body.deleteIDUsuario;
-    db.run(
-      'delete from users where user_id=?',deleteIDUsuario,
-      (err) => {
-        if (err) {
-          console.log("Error al eliminar el usuario con error: " + err);
-          return;
-        }
-        res.json({ msg: 'usuario eliminado correctamente' });
+function processDeleteUsuarios(req, res, db) {
+  var deleteIDUsuario = req.body.deleteIDUsuario;
+  db.run(
+    'delete from users where user_id=?', deleteIDUsuario,
+    (err) => {
+      if (err) {
+        console.log("Error al eliminar el usuario con error: " + err);
+        return;
       }
-    );
-  }
+      res.json({ msg: 'usuario eliminado correctamente' });
+    }
+  );
+}
 
 
-  // Configurar la accion asociada a la insercción  de nuevas categorias
-router.delete('/deleteCategorias', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
-  if (!req.body.deleteNameCategoria ) {
+// Configurar la accion asociada a la insercción  de nuevas categorias
+router.delete('/deleteCategorias', verificarUsuario, (req, res) => {
+  if (!req.body.deleteNameCategoria) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
     processDeleteCategorias(req, res, db); // Se le pasa tambien la base de datos
   }
-  });
+});
 
 
 
 
-  router.delete('/deleteVideos', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
-    if (!req.body.deleteNameVideo) {
-      res.json({ errormsg: 'Peticion mal formada' });
-    } else {
-      // La petición está bien formada -> procesarla
-      processDeleteVideos(req, res, db); // Se le pasa tambien la base de datos
-    }
-    });
+router.delete('/deleteVideos', verificarUsuario, (req, res) => {
+  if (!req.body.deleteNameVideo) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processDeleteVideos(req, res, db); // Se le pasa tambien la base de datos
+  }
+});
 
 
-    router.delete('/deleteUsuarios', (req, res) =>{// Comprobar si la petición contiene los campos ('user' y 'passwd')
-      if (!req.body.deleteIDUsuario) {
-        res.json({ errormsg: 'Peticion mal formada' });
-      } else {
-        // La petición está bien formada -> procesarla
-        processDeleteUsuarios(req, res, db); // Se le pasa tambien la base de datos
-      }
-      });
+router.delete('/deleteUsuarios', verificarUsuario, (req, res) => {
+  if (!req.body.deleteIDUsuario) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processDeleteUsuarios(req, res, db); // Se le pasa tambien la base de datos
+  }
+});
 
 
-      //Método para actualizar informacion usando el patch
 
+//Método para actualizar informacion usando el patch. MODIFICADOS  PARA QUE SE HAGA VIA ID
 
-      // Configurar la accion asociada a la actualización de categorias
-router.patch('/patchCategorias', (req, res) => {
-  if (!req.body.nameCategoria) {
+// Configurar la accion asociada a la actualización de categorias
+router.patch('/patchCategorias', verificarUsuario, (req, res) => {
+  if (!req.body.PatchIdCategoria && !req.body.newNameCategoria) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
@@ -459,18 +497,51 @@ router.patch('/patchCategorias', (req, res) => {
 
 
 function processPatchCategorias(req, res, db) {
-  var nameCategoria = req.body.nameCategoria;
+  var PatchIdCategoria = req.body.PatchIdCategoria;
   var newNameCategoria = req.body.newNameCategoria; // Nuevo nombre para la categoría
+  var id = PatchIdCategoria;
+  db.run(
+    'UPDATE categorias SET name = ? WHERE id = ?',
+    [newNameCategoria, id],
+    function (err) {
+      if (err) {
+        console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
+        res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+      } else if (this.changes === 0) {
+        // No se afectó ninguna fila
+        res.json({ errormsg: "No se encontró el video con el ID proporcionado" });
+      } else {
+        res.json({ msg: 'Actualizado correctamente' });
+      }
+    }
+  );
+}
 
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
+
+
+
+
+// Configurar la accion asociada a la actualización de videos
+router.patch('/patchVideo', verificarUsuario, (req, res) => {
+  if (!req.body.newPatchUrlDeVideo && !req.body.newPatchNameDeVideo && !req.body.newPatchCategoriaDeVideo && !req.body.PatchIdDeVideo) {
+    res.json({ errormsg: 'Peticion mal formada' });
+  } else {
+    // La petición está bien formada -> procesarla
+    processPatchVideos(req, res, db); // Se le pasa también la base de datos
   }
+});
 
+
+
+function processPatchVideos(req, res, db) {
+  var newPatchUrlDeVideo = req.body.newPatchUrlDeVideo;
+  var newPatchNameDeVideo = req.body.newPatchNameDeVideo;
+  var newPatchCategoriaDeVideo = req.body.newPatchCategoriaDeVideo;
+  var PatchIdDeVideo = req.body.PatchIdDeVideo;
   db.get(
     'SELECT id FROM categorias WHERE name = ?',
-    [nameCategoria],
-    function(err, row) {
+    [newPatchCategoriaDeVideo],
+    function (err, row) {
       if (err) {
         console.log("Error al buscar la categoría: " + err);
         res.json({ errormsg: "Error al buscar la categoría", error: err });
@@ -482,19 +553,20 @@ function processPatchCategorias(req, res, db) {
         return;
       }
 
-      var id = row.id;
-
+      var idCategoria = row.id;
+      // Actualiza el video con los nuevos detalles
       db.run(
-        'UPDATE categorias SET name = ? WHERE id = ?',
-        [newNameCategoria, id],
-        function(err) {
-          console.log("Actualizando la categoría con ID " + id + " a " + newNameCategoria);
-
+        'UPDATE videos SET title = ?, url = ?, categoria = ?, id_cat = ? WHERE id = ?',
+        [newPatchNameDeVideo, newPatchUrlDeVideo, newPatchCategoriaDeVideo, idCategoria, PatchIdDeVideo],
+        function (err) {
           if (err) {
             console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
             res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+          } else if (this.changes === 0) {
+            // No se afectó ninguna fila
+            res.json({ errormsg: "No se encontró el video con el ID proporcionado" });
           } else {
-            res.json({ errormsg: 'Actualizado correctamente' });
+            res.json({ msg: 'Actualizado correctamente' });
           }
         }
       );
@@ -505,81 +577,14 @@ function processPatchCategorias(req, res, db) {
 
 
 
-// Configurar la accion asociada a la actualización de videos
-router.patch('/patchVideo', (req, res) => {
-  if (!req.body.postNameDeVideo && !req.body.newPostUrlDeVideo && !req.body.postNameCategoriaDeVideo && !newPostNameDeVideo) {
-    res.json({ errormsg: 'Peticion mal formada' });
-  } else {
-    // La petición está bien formada -> procesarla
-    processPatchVideos(req, res, db); // Se le pasa también la base de datos
-  }
-});
 
 
 
 
-function processPatchVideos(req, res, db) {
-  var nameCategoriaVideo = req.body.postNameCategoriaDeVideo;
-  var postNameDeVideo = req.body.postNameDeVideo;
-  var newPostUrlDeVideo = req.body.newPostUrlDeVideo;
-  var newPostNameDeVideo = req.body.newPostNameDeVideo;
-
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;
-  }
-
-  // Primero, verificar si la categoría ya existe
-  db.get('SELECT id FROM categorias WHERE name = ?', [nameCategoriaVideo], (err, row) => {
-    if (err) {
-      console.log("Error al verificar la categoría: " + err);
-      res.json({ errormsg: "Error al verificar la categoría", error: err });
-      return;
-    }
-
-    if (!row) {
-      res.json({ errormsg: "La categoría introducida no existe, por favor crea una nueva" });
-      return;
-    }
-
-    // Usar el id de la categoría porque existe
-    var idCategoria = row.id;
-
-    // Busca el video con el nombre y categoría proporcionados
-    db.get('SELECT id FROM videos WHERE title = ? AND id_cat = ?', [postNameDeVideo, idCategoria], (err, row) => {
-      if (err) {
-        console.log("Error al buscar el video: " + err);
-        res.json({ errormsg: "Error al buscar el video", error: err });
-        return;
-      }
-
-      if (!row) {
-        res.json({ errormsg: "El video no existe en la categoría proporcionada" });
-        return;
-      }
-
-      // Actualiza el video con los nuevos detalles
-      db.run(
-        'UPDATE videos SET title = ?, url = ? WHERE id = ?',
-        [newPostNameDeVideo || postNameDeVideo, newPostUrlDeVideo || newPostUrlDeVideo, row.id],
-        function(err) {
-          console.log("Actualizando el video con ID " + row.id + " a " + (newPostNameDeVideo || postNameDeVideo) + " y URL " + (newPostUrlDeVideo || postUrlDeVideo));
-
-          if (err) {
-            console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
-            res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
-          } else {
-            res.json({ msg: 'Actualizado correctamente' });
-          }
-        }
-      );
-    });
-  });
-}
-
-router.patch('/patchUsuario', (req, res) => {
-  if (!req.body.patchNameDeUsuario && !req.body.patchMailDeUsuario && !req.body.patchPasswdDelUsuario && 
-    !req.body.newpatchNameDeUsuario && !req.body.newpatchMailDeUsuario && !req.body.newpatchPasswdDelUsuario) {
+router.patch('/patchUsuario', verificarUsuario, (req, res) => {
+  if (!req.body.patchIdUsuario && !req.body.newpatchNameDeUsuario && !req.body.newpatchMailDeUsuario && !req.body.newpatchPasswdDelUsuario &&
+    !req.body.newpatchROLDelUsuario
+  ) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
@@ -587,55 +592,31 @@ router.patch('/patchUsuario', (req, res) => {
   }
 });
 
-
-
-
-
 function processPatchUsuario(req, res, db) {
-  var patchNameDeUsuario = req.body.patchNameDeUsuario;
-  var patchMailDeUsuario = req.body.patchMailDeUsuario;
-  var patchPasswdDelUsuario = req.body.patchPasswdDelUsuario;
+  var patchIdUsuario = req.body.patchIdUsuario;
   var newpatchNameDeUsuario = req.body.newpatchNameDeUsuario;
   var newpatchMailDeUsuario = req.body.newpatchMailDeUsuario;
   var newpatchPasswdDelUsuario = req.body.newpatchPasswdDelUsuario;
-
-  if (!verificarUsuario(req)) {
-    res.json({ errormsg: 'Usuario no autenticado' });
-    return;}
- // Primero, verificar si el usuario  existe
- db.get('SELECT user_id FROM users WHERE name = ?', [patchNameDeUsuario], (err, row) => {
-  if (err) {
-    res.json({ errormsg: "Nombre de usuario inexistente", error: err });
-    return;
-  }
-
-
-
-  if (!row) {
-    res.json({ errormsg: "El usuario introducido, no existe" });
-    return;
-  }
-
+  var newpatchROLDelUsuario = req.body.newpatchROLDelUsuario;  //ATENCUIon este parametro no puedes implementarlohasta que no te suba las nuevas modificaciones 
+  //DE la BBDD , ahora simplemente ignoaralo.
   // Usar el id del usuario porque existe
-  var idUser = row.user_id;
-
-
-    // Actualiza el usuarip con los nuevos detalles
-    db.run(
-      'UPDATE users SET name = ?, mail = ?, passwd=? WHERE user_id = ?',
-      [newpatchNameDeUsuario || patchNameDeUsuario, newpatchMailDeUsuario || patchMailDeUsuario,newpatchPasswdDelUsuario || patchPasswdDelUsuario , idUser],
-      function(err) {
-        console.log("Actualizando el user con ID " + idUser + " a " + (newpatchNameDeUsuario || patchNameDeUsuario) + " mail: " + (newpatchPasswdDelUsuario || patchPasswdDelUsuario));
-
-        if (err) {
-          console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
-          res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
-        } else {
-          res.json({ msg: 'Actualizado correctamente' });
-        }
+  var idUser = patchIdUsuario;
+  // Actualiza el usuarip con los nuevos detalles
+  db.run(
+    'UPDATE users SET name = ?, mail = ?, passwd=? , ROL=? WHERE user_id = ?',
+    [newpatchNameDeUsuario, newpatchMailDeUsuario, newpatchPasswdDelUsuario, newpatchROLDelUsuario, idUser],
+    function (err) {
+      if (err) {
+        console.log("Se ha producido el siguiente error a la hora de la actualización: " + err);
+        res.json({ errormsg: "Se ha producido el siguiente error a la hora de la actualización", error: err });
+      } else if (this.changes === 0) {
+        // No se afectó ninguna fila
+        res.json({ errormsg: "No se encontró el video con el ID proporcionado" });
+      } else {
+        res.json({ msg: 'Actualizado correctamente' });
       }
-    );
-  });
+    }
+  );
 }
 
 
