@@ -233,7 +233,7 @@ router.post('/login', (req, res) => {
 
 //Logout
 router.delete('/logout', verificarUsuario, (req, res) => {// Comprobar si la petición contiene los campos ('user' y 'passwd')
-  if (!req.body.logoutIDUsuario) {
+  if (!req.query.logoutIDUsuario) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
@@ -243,7 +243,7 @@ router.delete('/logout', verificarUsuario, (req, res) => {// Comprobar si la pet
 
 
 function processLogout(req, res, db) {
-  var logoutIDUsuario = req.body.logoutIDUsuario;
+  var logoutIDUsuario = req.query.logoutIDUsuario;
   db.run(
     'delete from sesiones_virtuales where session_id=?', logoutIDUsuario,
     (err) => {
@@ -408,7 +408,7 @@ router.post('/postUsuario', verificarUsuario, (req, res) => {
 
 // metodos de delete
 function processDeleteCategorias(req, res, db) {
-  var deleteNameCategoria = req.body.deleteNameCategoria;
+  var deleteNameCategoria = req.query.deleteNameCategoria;
   db.run(
     'delete from categorias where name=?', deleteNameCategoria,
     (err) => {
@@ -423,15 +423,17 @@ function processDeleteCategorias(req, res, db) {
 
 
 function processDeleteVideos(req, res, db) {
-  var deleteNameVideo = req.body.deleteNameVideo;
+  var deleteNameVideo = req.query.deleteNameVideo;
   db.run(
     'delete from videos where title=?', deleteNameVideo,
     (err) => {
       if (err) {
-        console.log("Error al eliminar video con error: " + err);
+        console.log("Error al eliminar video con error: " + err); 
+        res.json({ errormsg: 'Error al eliminar el video', error: err });
         return;
       }
-      res.json({ msg: 'video eliminado correctamente' });
+    res.json({ msg: 'video eliminado correctamente' });
+      
     }
   );
 }
@@ -439,7 +441,7 @@ function processDeleteVideos(req, res, db) {
 
 
 function processDeleteUsuarios(req, res, db) {
-  var deleteIDUsuario = req.body.deleteIDUsuario;
+  var deleteIDUsuario = req.query.deleteIDUsuario;
   db.run(
     'delete from users where user_id=?', deleteIDUsuario,
     (err) => {
@@ -455,7 +457,8 @@ function processDeleteUsuarios(req, res, db) {
 
 // Configurar la accion asociada a la insercción  de nuevas categorias
 router.delete('/deleteCategorias', verificarUsuario, (req, res) => {
-  if (!req.body.deleteNameCategoria) {
+   
+  if (!req.query.deleteNameCategoria) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
@@ -467,17 +470,20 @@ router.delete('/deleteCategorias', verificarUsuario, (req, res) => {
 
 
 router.delete('/deleteVideos', verificarUsuario, (req, res) => {
-  if (!req.body.deleteNameVideo) {
+
+  if (!req.query.deleteNameVideo) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
+    
     processDeleteVideos(req, res, db); // Se le pasa tambien la base de datos
   }
 });
 
 
 router.delete('/deleteUsuarios', verificarUsuario, (req, res) => {
-  if (!req.body.deleteIDUsuario) {
+   
+  if (!req.query.deleteIDUsuario) {
     res.json({ errormsg: 'Peticion mal formada' });
   } else {
     // La petición está bien formada -> procesarla
